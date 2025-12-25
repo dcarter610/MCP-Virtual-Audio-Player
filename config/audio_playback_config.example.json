@@ -1,0 +1,6 @@
+{
+  "AUDIO_ROOT_DIR": "/absolute/path/to/audio/files",
+  "AUDIO_OUTPUT_DEVICE": "Virtual Audio Device Name",
+  "DEFAULT_FORMAT": "wav",
+  "FFPLAY_PATH": "ffplay"
+}

@@ -1,0 +1,17 @@
+[project]
+name = "audio-playback-server"
+version = "0.1.0"
+description = "MCP server for controlling audio playback through a virtual device"
+authors = [{name = "MCP Developer"}]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp>=0.0.8",
+]
+
+[project.scripts]
+audio-playback-server = "audio_playback_server.server:run"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
