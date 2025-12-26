@@ -1,0 +1,2 @@
+[console_scripts]
+audio-playback-server = audio_playback_server.server:run

@@ -1,10 +1,20 @@
+Metadata-Version: 2.4
+Name: audio-playback-server
+Version: 0.1.0
+Summary: MCP server for controlling audio playback through a virtual device
+Author: MCP Developer
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: mcp>=0.0.8
+Dynamic: license-file
+
 # Audio Playback MCP Server
 
 This repository provides an MCP server named `audio-playback-server` that exposes a single `audio_playback` tool. The tool lets an MCP client start, stop, and inspect playback of local audio files routed through a configurable virtual audio output device.
 
 ## Features
 - Play audio files from a configurable root directory using `ffplay`.
-- Get audio file duration (in seconds) when playing files using `ffprobe`.
 - Stop current playback.
 - Query current status with a position estimate.
 - Path safety enforcement to prevent leaving the configured root directory.
@@ -46,4 +56,4 @@ The `audio_playback` tool accepts the following JSON input:
 - `loop`: Loop playback until stopped (default `false`)
 - `start_offset_ms`: Start offset in milliseconds (default `0`)
 
-Responses always include `success`, `message`, and a `state` object with `status`, `current_file`, `started_at_ms`, and `position_estimate_ms`. When playing a file, the response also includes `duration_seconds` (float) in the `state` object, indicating the total duration of the audio file in seconds. The duration is also included in the `message` text for convenience.
+Responses always include `success`, `message`, and a `state` object with `status`, `current_file`, `started_at_ms`, and `position_estimate_ms`.

@@ -1,4 +1,5 @@
 import asyncio
+import platform
 import subprocess
 import time
 from dataclasses import dataclass
@@ -49,7 +50,7 @@ class AudioPlaybackManager:
 
     async def play(
         self, filename: str, loop: bool = False, start_offset_ms: int = 0
-    ) -> Tuple[bool, str, Dict[str, Optional[int | str]]]:
+    ) -> Tuple[bool, str, Dict[str, Optional[int | str | float]]]:
         async with self._lock:
             normalized_relative, resolved_path = self._normalize_filename(filename)
             if not resolved_path.exists():
@@ -59,6 +60,9 @@ class AudioPlaybackManager:
                     f"File '{normalized_relative}' not found under AUDIO_ROOT_DIR.",
                     self._state.to_response(),
                 )
+
+            # Get audio file duration
+            duration_seconds = await self._get_audio_duration(resolved_path)
 
             await self._stop_process()
 
@@ -99,8 +103,15 @@ class AudioPlaybackManager:
             )
             if loop:
                 message += " Looping until stopped."
+            
+            if duration_seconds is not None:
+                message += f" Duration: {duration_seconds:.2f} seconds."
 
-            return True, message, self._state.to_response()
+            response = self._state.to_response()
+            if duration_seconds is not None:
+                response["duration_seconds"] = duration_seconds
+
+            return True, message, response
 
     async def stop(self) -> Tuple[bool, str, Dict[str, Optional[int | str]]]:
         async with self._lock:
@@ -169,6 +180,53 @@ class AudioPlaybackManager:
 
         return normalized_relative, resolved
 
+    async def _get_audio_duration(self, file_path: Path) -> Optional[float]:
+        """Get the duration of an audio file in seconds using ffprobe."""
+        # Determine ffprobe path (usually in the same directory as ffplay)
+        ffplay_path = Path(self.config.ffplay_path)
+        if ffplay_path.is_absolute():
+            # If ffplay is an absolute path, try to find ffprobe in the same directory
+            ffprobe_path = ffplay_path.parent / "ffprobe"
+            if platform.system() == "Windows":
+                ffprobe_path = ffprobe_path.with_suffix(".exe")
+        else:
+            # If ffplay is just a command name, assume ffprobe is also available
+            ffprobe_path = "ffprobe"
+            if platform.system() == "Windows":
+                ffprobe_path = "ffprobe.exe"
+
+        command = [
+            str(ffprobe_path),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(file_path),
+        ]
+
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run,
+                command,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                duration = float(result.stdout.strip())
+                return duration
+        except (FileNotFoundError, ValueError, subprocess.TimeoutExpired) as exc:
+            # If ffprobe is not available or fails, we'll just continue without duration
+            # This is not a critical error - playback can still work
+            pass
+        except Exception:
+            # Silently ignore other errors - duration is optional
+            pass
+
+        return None
+
     def _build_ffplay_command(
         self, file_path: Path, loop: bool, start_offset_ms: int
     ) -> list[str]:
@@ -187,7 +245,17 @@ class AudioPlaybackManager:
         if loop:
             command.extend(["-loop", "0"])
 
-        command.extend(["-device", self.config.output_device])
-        command.extend(["-i", str(file_path)])
+        # On Windows, ffplay doesn't support -device for output selection like ALSA on Linux.
+        # We'll play the file normally and it will use the Windows default audio device.
+        # On Linux/ALSA, use -device flag for output device selection.
+        if platform.system() == "Windows":
+            # Just play the file - Windows will route to default device
+            command.extend(["-i", str(file_path)])
+        else:
+            # Linux/ALSA: use -device for output device
+            if not self.config.output_device:
+                raise ValueError("AUDIO_OUTPUT_DEVICE is required on non-Windows systems.")
+            command.extend(["-device", self.config.output_device])
+            command.extend(["-i", str(file_path)])
 
         return command

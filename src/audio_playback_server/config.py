@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import os
+import platform
 from typing import Any, Dict, Optional
 
 
@@ -15,7 +16,7 @@ class ConfigError(Exception):
 @dataclass
 class AudioPlaybackConfig:
     root_dir: Path
-    output_device: str
+    output_device: Optional[str] = None
     default_format: str = "wav"
     ffplay_path: str = "ffplay"
 
@@ -29,7 +30,7 @@ class AudioPlaybackConfig:
         present.
         """
 
-        base = base_dir or Path(__file__).resolve().parent.parent
+        base = base_dir or Path(__file__).resolve().parent.parent.parent
         json_data: Dict[str, Any] = {}
 
         config_path_env = os.environ.get(CONFIG_ENV_VAR)
@@ -37,9 +38,15 @@ class AudioPlaybackConfig:
         if config_path_env:
             candidate_paths.append(Path(config_path_env))
 
+        # Try project root config first, then src/config as fallback
         default_json = base / "config" / "audio_playback_config.json"
         if default_json.exists():
             candidate_paths.append(default_json)
+        
+        # Fallback to src/config if project root doesn't exist
+        src_config_json = base / "src" / "config" / "audio_playback_config.json"
+        if src_config_json.exists():
+            candidate_paths.append(src_config_json)
 
         for candidate in candidate_paths:
             if candidate.exists():
@@ -60,9 +67,11 @@ class AudioPlaybackConfig:
         if not root_dir_value:
             raise ConfigError("AUDIO_ROOT_DIR is required.")
 
+        # On Windows, output device is optional (uses default)
+        # On Linux/ALSA, output device is required
         output_device = get_value("AUDIO_OUTPUT_DEVICE")
-        if not output_device:
-            raise ConfigError("AUDIO_OUTPUT_DEVICE is required.")
+        if platform.system() != "Windows" and not output_device:
+            raise ConfigError("AUDIO_OUTPUT_DEVICE is required on non-Windows systems.")
 
         default_format = get_value("DEFAULT_FORMAT", "wav") or "wav"
         ffplay_path = get_value("FFPLAY_PATH", "ffplay") or "ffplay"
