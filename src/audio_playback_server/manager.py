@@ -94,9 +94,7 @@ class AudioPlaybackManager:
                 start_offset_ms=start_offset_ms,
             )
             self._monitor_task = asyncio.create_task(self._monitor_process(process))
-            message = (
-                f"Playing '{normalized_relative}' from {start_offset_ms} ms."
-            )
+            message = f"Playing '{normalized_relative}' from {start_offset_ms} ms."
             if loop:
                 message += " Looping until stopped."
 
@@ -121,6 +119,35 @@ class AudioPlaybackManager:
             elif state_copy.status == "error":
                 message = "Playback error encountered."
             return True, message, state_copy.to_response()
+
+    def list_local_files(self, limit: int = 200) -> Dict[str, object]:
+        if limit <= 0:
+            raise ValueError("limit must be greater than 0.")
+
+        root = self.config.root_dir.resolve()
+        files: list[Dict[str, object]] = []
+
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+
+            relative_path = path.relative_to(root).as_posix()
+            files.append(
+                {
+                    "filename": relative_path,
+                    "size_bytes": path.stat().st_size,
+                }
+            )
+
+            if len(files) >= limit:
+                break
+
+        return {
+            "root_dir": str(root),
+            "count": len(files),
+            "limit": limit,
+            "files": files,
+        }
 
     async def _stop_process(self) -> None:
         if not self._process:
