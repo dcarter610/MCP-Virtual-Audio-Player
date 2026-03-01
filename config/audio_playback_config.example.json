@@ -2,5 +2,11 @@
   "AUDIO_ROOT_DIR": "/absolute/path/to/audio/files",
   "AUDIO_OUTPUT_DEVICE": "Virtual Audio Device Name",
   "DEFAULT_FORMAT": "wav",
-  "FFPLAY_PATH": "ffplay"
+  "FFPLAY_PATH": "ffplay",
+  "MCP_TRANSPORT": "http",
+  "MCP_HTTP_HOST": "0.0.0.0",
+  "MCP_HTTP_PORT": "8765",
+  "MCP_HTTP_PATH": "/mcp",
+  "MCP_DNS_REBINDING_PROTECTION": true,
+  "MCP_ALLOWED_HOSTS": "192.168.1.10,windows-hostname"
 }
