@@ -8,7 +8,7 @@ from typing import Dict, Literal, Optional, Tuple
 
 from .config import AudioPlaybackConfig
 
-PlaybackStatus = Literal["idle", "playing", "stopped", "error"]
+PlaybackStatus = Literal["idle", "playing", "paused", "stopped", "error"]
 
 
 @dataclass
@@ -17,6 +17,7 @@ class PlaybackState:
     current_file: Optional[str] = None
     started_at_ms: Optional[int] = None
     start_offset_ms: int = 0
+    paused_at_ms: Optional[int] = None  # position when paused; used for resume
 
     def to_response(self) -> Dict[str, int | str | None]:
         return {
@@ -27,6 +28,8 @@ class PlaybackState:
         }
 
     def _position_estimate(self) -> Optional[int]:
+        if self.status == "paused" and self.paused_at_ms is not None:
+            return self.paused_at_ms
         if self.status != "playing" or self.started_at_ms is None:
             return None
         now_ms = int(time.time() * 1000)
@@ -49,7 +52,7 @@ class AudioPlaybackManager:
         return self._state.to_response()
 
     async def play(
-        self, filename: str, loop: bool = False, start_offset_ms: int = 0
+        self, filename: str, start_offset_ms: int = 0
     ) -> Tuple[bool, str, Dict[str, Optional[int | str | float]]]:
         async with self._lock:
             normalized_relative, resolved_path = self._normalize_filename(filename)
@@ -66,7 +69,7 @@ class AudioPlaybackManager:
 
             await self._stop_process()
 
-            command = self._build_ffplay_command(resolved_path, loop, start_offset_ms)
+            command = self._build_ffplay_command(resolved_path, start_offset_ms)
 
             try:
                 process = subprocess.Popen(
@@ -99,9 +102,6 @@ class AudioPlaybackManager:
             )
             self._monitor_task = asyncio.create_task(self._monitor_process(process))
             message = f"Playing '{normalized_relative}' from {start_offset_ms} ms."
-            if loop:
-                message += " Looping until stopped."
-            
             if duration_seconds is not None:
                 message += f" Duration: {duration_seconds:.2f} seconds."
 
@@ -121,11 +121,45 @@ class AudioPlaybackManager:
             self._state = PlaybackState(status="stopped")
             return True, "Playback stopped.", self._state.to_response()
 
+    async def pause(self) -> Tuple[bool, str, Dict[str, Optional[int | str]]]:
+        async with self._lock:
+            if self._state.status != "playing":
+                return (
+                    False,
+                    "No playback to pause." if self._state.status != "paused" else "Already paused.",
+                    self._state.to_response(),
+                )
+            position_ms = self._state._position_estimate()
+            if position_ms is None:
+                position_ms = self._state.start_offset_ms
+            current_file = self._state.current_file
+            await self._stop_process()
+            self._state = PlaybackState(
+                status="paused",
+                current_file=current_file,
+                paused_at_ms=position_ms,
+            )
+            return True, f"Playback paused at {position_ms} ms. Use resume to continue.", self._state.to_response()
+
+    async def resume(self) -> Tuple[bool, str, Dict[str, Optional[int | str | float]]]:
+        async with self._lock:
+            if self._state.status != "paused" or not self._state.current_file or self._state.paused_at_ms is None:
+                return (
+                    False,
+                    "Nothing to resume. Pause playback first, or start with play.",
+                    self._state.to_response(),
+                )
+            filename = self._state.current_file
+            start_offset_ms = self._state.paused_at_ms
+        return await self.play(filename=filename, start_offset_ms=start_offset_ms)
+
     async def status(self) -> Tuple[bool, str, Dict[str, Optional[int | str]]]:
         async with self._lock:
             state_copy = self._state
             message = "Currently playing." if state_copy.status == "playing" else "Idle."
-            if state_copy.status == "stopped":
+            if state_copy.status == "paused":
+                message = "Playback paused."
+            elif state_copy.status == "stopped":
                 message = "Playback stopped."
             elif state_copy.status == "error":
                 message = "Playback error encountered."
@@ -255,7 +289,7 @@ class AudioPlaybackManager:
         return None
 
     def _build_ffplay_command(
-        self, file_path: Path, loop: bool, start_offset_ms: int
+        self, file_path: Path, start_offset_ms: int
     ) -> list[str]:
         command = [
             self.config.ffplay_path,
@@ -268,9 +302,6 @@ class AudioPlaybackManager:
 
         if start_offset_ms > 0:
             command.extend(["-ss", f"{start_offset_ms / 1000:.3f}"])
-
-        if loop:
-            command.extend(["-loop", "0"])
 
         # On Windows, ffplay doesn't support -device for output selection like ALSA on Linux.
         # We'll play the file normally and it will use the Windows default audio device.

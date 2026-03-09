@@ -6,6 +6,7 @@ This repository provides an MCP server named `audio-playback-server` that expose
 - Play audio files from a configurable root directory using `ffplay`.
 - Get audio file duration (in seconds) when playing files using `ffprobe`.
 - Stop current playback.
+- Pause playback (saves position); resume continues from that position.
 - Query current status with a position estimate.
 - List audio files hosted locally under `AUDIO_ROOT_DIR`.
 - Path safety enforcement to prevent leaving the configured root directory.
@@ -68,9 +69,8 @@ In HTTP mode, the server stays running and accepts MCP requests at `http://<host
 
 ## Tool schema
 The `audio_playback` tool accepts the following JSON input:
-- `action`: `play`, `stop`, `status`, or `list_files` (required)
+- `action`: `play`, `stop`, `pause`, `resume`, `status`, or `list_files` (required)
 - `filename`: Relative path under `AUDIO_ROOT_DIR` (required for `play`)
-- `loop`: Loop playback until stopped (default `false`)
 - `start_offset_ms`: Start offset in milliseconds (default `0`)
 - `list_limit`: Maximum number of files returned when `action=list_files` (default `200`)
 

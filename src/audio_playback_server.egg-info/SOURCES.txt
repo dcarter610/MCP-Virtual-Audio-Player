@@ -2,6 +2,7 @@ LICENSE
 README.md
 pyproject.toml
 src/audio_playback_server/__init__.py
+src/audio_playback_server/__main__.py
 src/audio_playback_server/config.py
 src/audio_playback_server/manager.py
 src/audio_playback_server/server.py

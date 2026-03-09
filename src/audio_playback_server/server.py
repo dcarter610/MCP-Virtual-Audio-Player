@@ -31,9 +31,8 @@ def _build_server(config: AudioPlaybackConfig, manager: AudioPlaybackManager) ->
         ),
     )
     async def audio_playback(
-        action: Literal["play", "stop", "status", "list_files"],
+        action: Literal["play", "stop", "pause", "resume", "status", "list_files"],
         filename: Optional[str] = None,
-        loop: bool = False,
         start_offset_ms: int = 0,
         list_limit: int = 200,
     ) -> dict:
@@ -55,13 +54,20 @@ def _build_server(config: AudioPlaybackConfig, manager: AudioPlaybackManager) ->
             if action == "play":
                 success, message, state = await manager.play(
                     filename=filename or "",
-                    loop=loop,
                     start_offset_ms=start_offset_ms,
                 )
                 return {"success": success, "message": message, "state": state}
 
             if action == "stop":
                 success, message, state = await manager.stop()
+                return {"success": success, "message": message, "state": state}
+
+            if action == "pause":
+                success, message, state = await manager.pause()
+                return {"success": success, "message": message, "state": state}
+
+            if action == "resume":
+                success, message, state = await manager.resume()
                 return {"success": success, "message": message, "state": state}
 
             if action == "status":
